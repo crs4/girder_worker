@@ -99,6 +99,9 @@ def _run_container(image, container_args,  **kwargs):
                 % (image, container_args, runtime, kwargs))
     try:
         name = None
+        env_cap_add = os.environ.get("CAP_ADD", "")
+        cap_add = [s for s in env_cap_add.split(",") if s]
+
         try:
             if runtime == 'nvidia' and kwargs.get('device_requests') is None:
                 # Docker < 19.03 required the runtime='nvidia' argument.
@@ -113,7 +116,7 @@ def _run_container(image, container_args,  **kwargs):
                         'name',
                         'girder_worker_' + datetime.datetime.now().strftime('%Y%m%d_%H%M%S_%f'))
                     return client.containers.run(
-                        image, container_args, **device_requests_kwargs)
+                        image, container_args, **device_requests_kwargs, cap_add=cap_add)
                 except (APIError, InvalidVersion):
                     _remove_stopped_container(client, name)
                     pass
@@ -122,7 +125,7 @@ def _run_container(image, container_args,  **kwargs):
                 'name',
                 'girder_worker_' + datetime.datetime.now().strftime('%Y%m%d_%H%M%S_%f'))
             return client.containers.run(
-                image, container_args, runtime=runtime, **kwargs)
+                image, container_args, runtime=runtime, **kwargs, cap_add=cap_add)
         except APIError:
             _remove_stopped_container(client, name)
             if origRuntime is None and runtime is not None:
@@ -130,7 +133,7 @@ def _run_container(image, container_args,  **kwargs):
                 name = kwargs.setdefault(
                     'name',
                     'girder_worker_' + datetime.datetime.now().strftime('%Y%m%d_%H%M%S_%f'))
-                return client.containers.run(image, container_args, **kwargs)
+                return client.containers.run(image, container_args, **kwargs, cap_add=cap_add)
             else:
                 raise
     except DockerException:
@@ -447,6 +450,11 @@ def docker_run(task, image, pull_image=True, entrypoint=None, container_args=Non
     :return: Fulfilled result hooks.
     :rtype: list
     """
+    env_cap_add = os.environ.get("CAP_ADD", "")
+    cap_add = [s for s in env_cap_add.split(",") if s] + kwargs.get("cap_add", [])
+    if cap_add:
+        kwargs["cap_add"] = cap_add
+
     return _docker_run(
         task, image, pull_image, entrypoint, container_args, volumes,
         remove_container, **kwargs)
